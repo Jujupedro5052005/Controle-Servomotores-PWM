@@ -46,7 +46,9 @@ pico_enable_stdio_usb(Atividade_Servo_PWM 1)
 
 # Add the standard library to the build
 target_link_libraries(Atividade_Servo_PWM
-        pico_stdlib)
+        pico_stdlib
+        hardware_pwm
+        hardware_adc)
 
 # Add the standard include files to the build
 target_include_directories(Atividade_Servo_PWM PRIVATE
