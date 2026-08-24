@@ -10,13 +10,6 @@ O projeto é dividido em três níveis progressivos. Cada etapa reutiliza a estr
 
 ---
 
-## Integrantes
-
-* **João Pedro de Jesus Cândido Silva** — R.A. 23.01416-4
-* **Erich Abreu Serafim** — R.A. 23.10022-2
-
----
-
 ## Objetivo
 
 Aplicar os periféricos de **PWM**, **ADC** e **timers** do RP2040 no controle de posição de servomotores.
@@ -43,15 +36,6 @@ Potenciômetro
       ↓
     Servo
 
-
-Nível 3
-             Potenciômetro
-                  ↓
-                 ADC
-                  ↓
-          divisão da faixa
-             ↙         ↘
-        Servo 1       Servo 2
 ```
 
 ---
