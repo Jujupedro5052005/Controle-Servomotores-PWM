@@ -1,115 +1,554 @@
-Desenvolver uma aplicação embarcada utilizando o Raspberry Pi Pico, o Pico SDK e a linguagem C para controlar servomotores por meio das saídas de PWM do RP2040. O desafio é dividido em três níveis progressivos: cada nível reaproveita os conceitos do anterior e acrescenta uma nova funcionalidade.
+# Controle de Servomotores por PWM — Raspberry Pi Pico RP2040
 
-Objetivo
+Aplicação embarcada desenvolvida com **Raspberry Pi Pico**, **Pico SDK** e **C/C++** para estudo e implementação do controle de servomotores utilizando o periférico de **PWM do RP2040**.
 
-Aplicar a geração de PWM do RP2040 no controle de posição de servomotores, evoluindo de uma sequência automática de posições para o controle por entrada analógica e, por fim, para o controle de dois servomotores a partir de um único potenciômetro.
+O projeto é dividido em três níveis progressivos. Cada etapa reutiliza a estrutura desenvolvida anteriormente e adiciona novos conceitos de sistemas embarcados:
 
-Referência de PWM
+1. controle automático de posição por temporização;
+2. controle de posição por entrada analógica;
+3. controle de dois servomotores utilizando um único potenciômetro.
 
-Para os servomotores utilizados na aula, considere como referência um período de aproximadamente 20 ms (50 Hz). A posição é determinada pela largura do pulso de controle:
+---
 
-aproximadamente 1,0 ms para 0 graus;
-aproximadamente 1,5 ms para 90 graus;
-aproximadamente 2,0 ms para 180 graus.
-Esses valores são referências de laboratório. Caso o servomotor atinja o limite mecânico antes dos extremos, reduza a faixa de pulsos e registre no código os limites adotados.
+## Integrantes
 
-Níveis do Desafio
+* **João Pedro de Jesus Cândido Silva** — R.A. 23.01416-4
+* **Erich Abreu Serafim** — R.A. 23.10022-2
 
-Nível 1 - Sequência automática de posições
+---
 
-Controlar um servomotor utilizando uma saída de PWM do RP2040.
+## Objetivo
 
-O software deve posicionar o servomotor, em sequência, nas seguintes posições:
+Aplicar os periféricos de **PWM**, **ADC** e **timers** do RP2040 no controle de posição de servomotores.
 
-0 graus;
-45 graus;
-90 graus;
-135 graus;
-180 graus;
-135 graus;
-90 graus;
-45 graus;
-0 graus.
-Aguardar aproximadamente 2 segundos entre cada mudança de posição.
-A temporização deve ser implementada com um recurso de timer do Pico SDK, realizando a atualização do duty cycle / nível ativo do PWM sem utilizar sleep_ms() como mecanismo principal de controle.
-Nível 2 - Controle de um servomotor por potenciômetro
+A evolução do projeto segue a arquitetura:
 
-A partir da implementação do Nível 1, substituir a sequência automática por um controle contínuo da posição do servomotor através de uma entrada analógica.
+```text
+Nível 1
+Sequência de ângulos
+        ↓
+      Timer
+        ↓
+Ângulo → PWM → Servo
 
-Utilizar um potenciômetro como entrada analógica. Para padronização da bancada, utilizar GP26 / ADC0.
-Ler continuamente o valor do ADC.
-Mapear a faixa de leitura do potenciômetro para uma posição entre 0 e 180 graus.
-Atualizar o PWM para que a posição do servomotor acompanhe a variação do potenciômetro durante a execução.
-A leitura pode ser realizada com adc_read(); não é obrigatório utilizar interrupção do ADC.
-Nível 3 - Controle de dois servomotores com um potenciômetro
 
-Evoluir a solução do Nível 2 para controlar dois servomotores utilizando duas saídas PWM e a mesma entrada analógica do potenciômetro.
+Nível 2
+Potenciômetro
+      ↓
+     ADC
+      ↓
+   Ângulo
+      ↓
+     PWM
+      ↓
+    Servo
 
-Na primeira metade da faixa do potenciômetro, controlar o primeiro servomotor de 0 a 180 graus.
-Na segunda metade da faixa do potenciômetro, controlar o segundo servomotor de 0 a 180 graus.
-Utilizar duas saídas PWM independentes, permitindo definir a posição de cada servomotor separadamente.
-Os slides não especificam o comportamento de cada servomotor fora de sua metade ativa. O grupo deve definir uma convenção coerente para esse caso e documentá-la no código (por exemplo, manter a última posição ou manter o servo em um dos extremos).
-Requisitos Técnicos Gerais
 
-A implementação dos três níveis deve respeitar os seguintes requisitos:
+Nível 3
+             Potenciômetro
+                  ↓
+                 ADC
+                  ↓
+          divisão da faixa
+             ↙         ↘
+        Servo 1       Servo 2
+```
 
-Desenvolver o projeto em C utilizando o Pico SDK.
-Gerar o sinal dos servomotores utilizando os periféricos de PWM do RP2040, sem bibliotecas externas de controle de servo.
-Configurar o PWM para aproximadamente 50 Hz.
-Concentrar a conversão entre ângulo e largura de pulso / valor de comparação do PWM em uma função ou bloco de código bem definido.
-Identificar claramente no código os GPIOs utilizados para PWM e para o ADC.
-Limitar os valores calculados à faixa de pulsos definida para o servomotor, evitando comandos fora dos limites adotados.
-Manter a solução estável mesmo diante de pequenas oscilações na leitura analógica.
-Alimentação e Montagem
+---
 
-Com apenas um servomotor (Níveis 1 e 2), não é necessário utilizar fonte externa de bancada: o servo pode ser alimentado pelo VBUS do Raspberry Pi Pico durante a atividade de laboratório.
-Com dois servomotores (Nível 3), é recomendada a utilização de uma fonte externa de bancada para alimentar os servos.
-Ao utilizar fonte externa, conectar em comum o GND da fonte, o GND dos servomotores e o GND do Raspberry Pi Pico.
-Não alimentar servomotores pelo pino 3V3 do Pico.
-Recomendação: ao usar fonte externa, alimentar os servomotores diretamente pela fonte e evitar colocar a saída positiva da fonte em paralelo com o VBUS/USB do Pico.
-Caso ocorram tremores, resets ou comportamento instável, verificar primeiro a alimentação, o GND comum e os limites de pulso utilizados.
-Critérios de Avaliação
+# Hardware utilizado
 
-Serão avaliados, de forma conjunta, os seguintes itens:
+* Raspberry Pi Pico / RP2040
+* Servomotor Tower Pro SG90
+* Potenciômetro
+* Protoboard
+* Jumpers
+* Cabo USB
+* Fonte externa para a implementação com dois servomotores, quando necessária
 
-Configuração correta da frequência e dos parâmetros de PWM para o controle dos servomotores.
-Conversão correta entre ângulo e largura de pulso / duty cycle.
-Nível 1: execução correta da sequência de posições e respeito ao intervalo de aproximadamente 2 segundos.
-Nível 1: uso adequado do mecanismo de temporização para realizar as mudanças de posição.
-Nível 2: inicialização e leitura correta do ADC, com mapeamento coerente da entrada analógica para 0 a 180 graus.
-Nível 2: resposta contínua e estável do servomotor ao movimento do potenciômetro.
-Nível 3: configuração correta de duas saídas PWM e controle independente dos dois servomotores.
-Nível 3: divisão correta da faixa do potenciômetro entre os dois servomotores e coerência da convenção adotada fora da região ativa de cada um.
-Montagem elétrica adequada, incluindo a alimentação dos servomotores e o GND comum quando houver fonte externa.
-Organização, clareza, legibilidade e robustez geral do código.
-Observações e Sugestões
+### GPIOs utilizados
 
-Criem uma função para converter ângulo em largura de pulso ou valor de comparação do PWM, evitando números mágicos espalhados pelo programa.
-No Nível 1, uma boa estratégia é armazenar a sequência de ângulos em um vetor e utilizar um índice para avançar entre as posições.
-Nos Níveis 2 e 3, se pequenas oscilações do ADC causarem tremores, pode ser utilizada uma pequena zona morta (deadband) ou uma média simples de leituras.
-No Nível 3, documentem claramente o valor adotado como ponto médio do ADC e a forma de mapeamento de cada metade da faixa.
-Definam constantes para frequência do PWM, largura de pulso mínima/máxima, GPIOs e limites do ADC. Isso facilita a calibração e a leitura do código.
-Recomenda-se manter versões identificadas de cada nível para facilitar testes, demonstração e correção, mesmo que o código seja desenvolvido de forma incremental.
-Complementos Opcionais
+| Função        |                GPIO |
+| ------------- | ------------------: |
+| Servo 1 — PWM |                 GP0 |
+| Potenciômetro |         GP26 / ADC0 |
+| Servo 2 — PWM | definido no Nível 3 |
 
-Os itens abaixo são opcionais e não substituem os requisitos principais:
+---
 
-Aplicar média móvel ou outro filtro simples à leitura do ADC.
-Implementar uma pequena deadband para reduzir atualizações causadas apenas por ruído do potenciômetro.
-Criar constantes de calibração para as larguras de pulso mínima, central e máxima do servomotor.
-Enviar pela interface serial o valor do ADC, o ângulo calculado e/ou a largura de pulso aplicada durante a depuração.
-Quando houver osciloscópio ou analisador lógico disponível, verificar experimentalmente o período de aproximadamente 20 ms e as larguras de pulso utilizadas.
-Entrega
+# PWM do servomotor
 
-Os alunos devem:
+Servomotores são controlados pela largura do pulso de um sinal PWM periódico.
 
-Inserir, em comentário no topo do main.c (ou equivalente), o nome completo e o RA de todos os integrantes do grupo.
-Entregar as implementações dos três níveis de forma claramente identificada. Elas podem ser organizadas como versões ou subpastas do mesmo projeto.
-Entregar código funcional e compilável, incluindo os arquivos necessários para compilação com o Pico SDK / CMake.
-Compactar a pasta de entrega em um único arquivo .zip.
-Observações Finais
+A frequência utilizada no projeto é aproximadamente:
 
-O foco principal do desafio é compreender a geração de PWM para servomotores e a conversão de diferentes referências de entrada em posição angular.
-A progressão entre os níveis deve demonstrar domínio crescente: temporização, aquisição analógica e controle simultâneo de múltiplos atuadores.
-Melhorias opcionais são bem-vindas, mas não compensam requisitos principais incompletos.
-Se houver comportamento mecânico anormal, interrompa o acionamento e revise a montagem e os limites de pulso antes de continuar os testes.
+[
+f_{PWM}=50\ Hz
+]
+
+correspondente a um período de aproximadamente:
+
+[
+T=\frac{1}{50}=20\ ms
+]
+
+A referência inicial do laboratório era:
+
+| Posição | Largura de pulso |
+| ------: | ---------------: |
+|      0° |           1,0 ms |
+|     90° |           1,5 ms |
+|    180° |           2,0 ms |
+
+Durante os testes com os servomotores **SG90 utilizados na bancada**, essa faixa resultou em um deslocamento mecânico menor que 180°.
+
+Após calibração experimental, foi adotada a faixa:
+
+| Posição | Pulso utilizado |
+| ------: | --------------: |
+|      0° |          0,5 ms |
+|     45° |          1,0 ms |
+|     90° |          1,5 ms |
+|    135° |          2,0 ms |
+|    180° |          2,5 ms |
+
+Assim, o mapeamento utilizado no projeto é:
+
+[
+t_{pulso}
+=========
+
+0,5+
+\frac{\theta}{180}(2,5-0,5)
+]
+
+onde:
+
+* (\theta) é o ângulo desejado em graus;
+* (t_{pulso}) é a largura do pulso em milissegundos.
+
+A calibração foi mantida concentrada em constantes e na função responsável pela conversão de ângulo para PWM, facilitando alterações futuras.
+
+---
+
+# Configuração do PWM no RP2040
+
+A implementação utiliza:
+
+```cpp
+float fClkdiv = 125.0f;
+vu16Wrap = 20000;
+```
+
+Considerando o clock de aproximadamente 125 MHz do RP2040:
+
+```text
+125 MHz / 125 = 1 MHz
+```
+
+Portanto, o contador PWM opera com aproximadamente:
+
+```text
+1 tick = 1 µs
+```
+
+e:
+
+```text
+20000 ticks ≈ 20 ms ≈ 50 Hz
+```
+
+Essa configuração também facilita a interpretação dos valores de comparação utilizados pelo PWM.
+
+---
+
+# Seleção do nível
+
+As implementações são mantidas no mesmo código e selecionadas por uma flag de compilação no início do arquivo:
+
+```cpp
+#define LEVEL 1
+```
+
+ou:
+
+```cpp
+#define LEVEL 2
+```
+
+e futuramente:
+
+```cpp
+#define LEVEL 3
+```
+
+Isso permite testar cada etapa separadamente sem remover a implementação dos níveis anteriores.
+
+---
+
+# Nível 1 — Sequência automática de posições
+
+O primeiro nível controla um único servomotor através de uma sequência predefinida:
+
+```text
+0°
+↓
+45°
+↓
+90°
+↓
+135°
+↓
+180°
+↓
+135°
+↓
+90°
+↓
+45°
+↓
+0°
+```
+
+Cada posição é mantida por aproximadamente **2 segundos**.
+
+A sequência é armazenada em um vetor:
+
+```cpp
+float sequence[9] = {
+    0.0f, 45.0f, 90.0f, 135.0f, 180.0f,
+    135.0f, 90.0f, 45.0f, 0.0f
+};
+```
+
+A atualização não utiliza `sleep_ms()` como mecanismo principal de controle.
+
+Foi utilizado um **repeating timer do Pico SDK**:
+
+```cpp
+add_repeating_timer_ms(2000, timer1_cb, NULL, &timer1);
+```
+
+A cada chamada da callback, o próximo ângulo da sequência é enviado ao servomotor.
+
+## Demonstração — Nível 1
+
+![Demonstração do Nível 1](videos/level1.gif)
+
+---
+
+# Nível 2 — Controle por potenciômetro
+
+No segundo nível, a sequência automática é substituída pela leitura contínua de um potenciômetro conectado a:
+
+```text
+GP26 / ADC0
+```
+
+O ADC do RP2040 possui resolução de 12 bits, fornecendo valores entre:
+
+```text
+0 ... 4095
+```
+
+A leitura é convertida para um percentual:
+
+[
+p=\frac{ADC}{4095}
+]
+
+e posteriormente para um ângulo:
+
+[
+\theta = 180p
+]
+
+Portanto:
+
+|  ADC | Percentual | Ângulo aproximado |
+| ---: | ---------: | ----------------: |
+|    0 |         0% |                0° |
+| 1024 |        25% |               45° |
+| 2048 |        50% |               90° |
+| 3071 |        75% |              135° |
+| 4095 |       100% |              180° |
+
+O fluxo completo é:
+
+```text
+Potenciômetro
+     ↓
+GPIO26 / ADC0
+     ↓
+ adc_read()
+     ↓
+ 0 ... 4095
+     ↓
+ 0 ... 180°
+     ↓
+set_servo_angle()
+     ↓
+0,5 ... 2,5 ms
+     ↓
+ PWM 50 Hz
+     ↓
+   SG90
+```
+
+## Estabilidade da leitura
+
+Pequenas variações da leitura analógica podem resultar em pequenas correções contínuas de posição e, consequentemente, tremores no servomotor.
+
+Para reduzir esse efeito, a implementação pode utilizar:
+
+* média de múltiplas leituras do ADC;
+* deadband angular;
+* atualização periódica através de timer.
+
+A solução implementada utiliza média de amostras e uma pequena deadband antes de atualizar a posição.
+
+## Demonstração — Nível 2
+
+![Demonstração do Nível 2](videos/level2.gif)
+
+---
+
+# Nível 3 — Dois servomotores com um potenciômetro
+
+O terceiro nível expande a arquitetura do Nível 2 para duas saídas PWM independentes.
+
+A faixa do potenciômetro é dividida em duas regiões:
+
+```text
+ADC
+0 -------------------------------------------- 4095
+|                     |
+|                     |
+0                   ~2048                   4095
+
+      Servo 1                 Servo 2
+      0 → 180°                0 → 180°
+```
+
+Na primeira metade:
+
+[
+0 \le ADC \le ADC_{mid}
+]
+
+o **Servo 1** percorre de 0° a 180°.
+
+Na segunda metade:
+
+[
+ADC_{mid} < ADC \le 4095
+]
+
+o **Servo 2** percorre de 0° a 180°.
+
+O comportamento do servo fora de sua região ativa deve ser definido explicitamente pela implementação, por exemplo:
+
+* permanecer no último ângulo;
+* permanecer em 0°;
+* permanecer em 180°.
+
+> **Status:** implementação do Nível 3 em desenvolvimento.
+
+---
+
+# Montagem elétrica
+
+## Níveis 1 e 2
+
+Para um único servomotor:
+
+```text
+Raspberry Pi Pico            SG90
+-----------------            ----
+GPIO0 ---------------------> Signal
+GND   ---------------------> GND
+VBUS  ---------------------> VCC
+```
+
+Para o potenciômetro:
+
+```text
+3V3  -------- extremo do potenciômetro
+GND  -------- extremo oposto
+GP26 -------- terminal central / cursor
+```
+
+O potenciômetro funciona como um divisor de tensão entre **0 V e 3,3 V**, compatível com a entrada ADC do RP2040.
+
+## Nível 3
+
+Com dois servomotores, recomenda-se alimentação externa adequada.
+
+Nesse caso:
+
+```text
+Fonte +  -------- Servo 1 VCC
+          └------ Servo 2 VCC
+
+Fonte GND ------- Servo 1 GND
+          ├------ Servo 2 GND
+          └------ Pico GND
+```
+
+O **GND deve ser comum** entre:
+
+* Raspberry Pi Pico;
+* fonte externa;
+* Servo 1;
+* Servo 2.
+
+> Não alimentar os servomotores através do pino `3V3` do Raspberry Pi Pico.
+
+---
+
+# Estrutura do projeto
+
+Uma organização típica do repositório é:
+
+```text
+Controle-Servomotores-PWM/
+├── CMakeLists.txt
+├── main.cpp
+├── pico_sdk_import.cmake
+├── README.md
+└── videos/
+    ├── level1.gif
+    └── level2.gif
+```
+
+---
+
+# Compilação
+
+O projeto utiliza o **Raspberry Pi Pico SDK**.
+
+Com o ambiente do Pico SDK corretamente configurado:
+
+```bash
+mkdir build
+cd build
+cmake ..
+make -j
+```
+
+Após a compilação, o arquivo `.uf2` pode ser copiado para o Raspberry Pi Pico em modo **BOOTSEL**.
+
+Em sistemas utilizando a extensão oficial do Raspberry Pi Pico no VS Code, o projeto também pode ser compilado e carregado diretamente pelas ferramentas fornecidas pela extensão.
+
+---
+
+# Monitoramento serial
+
+Durante o desenvolvimento, são enviados pela interface serial valores úteis para depuração.
+
+No Nível 1, por exemplo:
+
+```text
+angle=0, pulse=0.500 ms, duty=0.0250, pwm=500
+angle=45, pulse=1.000 ms, duty=0.0500, pwm=1000
+angle=90, pulse=1.500 ms, duty=0.0750, pwm=1500
+angle=135, pulse=2.000 ms, duty=0.1000, pwm=2000
+angle=180, pulse=2.500 ms, duty=0.1250, pwm=2500
+```
+
+No Nível 2 também podem ser monitorados:
+
+```text
+ADC
+Percentual
+Ângulo calculado
+Largura do pulso
+Duty cycle
+PWM level
+```
+
+Isso permite verificar separadamente cada etapa da cadeia de controle.
+
+---
+
+# Conceitos aplicados
+
+O projeto explora diretamente os seguintes conceitos de sistemas embarcados:
+
+* PWM;
+* frequência e período;
+* duty cycle;
+* largura de pulso;
+* timers;
+* callbacks;
+* ADC;
+* aquisição analógica;
+* mapeamento linear;
+* calibração de atuadores;
+* filtragem simples;
+* deadband;
+* controle de múltiplos periféricos do RP2040.
+
+---
+
+# Requisitos atendidos
+
+* [x] Controle de servomotor através do hardware PWM do RP2040
+* [x] PWM de aproximadamente 50 Hz
+* [x] Conversão centralizada entre ângulo e largura de pulso
+* [x] Limitação da faixa de atuação do servomotor
+* [x] Nível 1 com sequência automática
+* [x] Nível 1 utilizando timer do Pico SDK
+* [x] Intervalo de aproximadamente 2 segundos entre posições
+* [x] ADC utilizando GP26 / ADC0
+* [x] Mapeamento ADC → 0°–180°
+* [x] Controle contínuo por potenciômetro
+* [x] Tratamento de pequenas oscilações do ADC
+* [ ] Controle de dois servomotores — Nível 3
+
+---
+
+# Observações
+
+Durante os testes foi identificada diferença entre a faixa nominal de pulsos indicada inicialmente e a faixa necessária para obter aproximadamente 180° de deslocamento nos SG90 utilizados.
+
+A calibração experimental adotada foi:
+
+```text
+500 µs  → 0°
+1500 µs → 90°
+2500 µs → 180°
+```
+
+Esses valores estão concentrados no código para permitir ajuste simples caso outro servomotor apresente limites mecânicos diferentes.
+
+Se o servo apresentar:
+
+* tremores excessivos;
+* ruídos mecânicos;
+* perda de posição;
+* resets do Raspberry Pi Pico;
+
+devem ser verificados, nesta ordem:
+
+1. alimentação do servomotor;
+2. conexão de GND comum;
+3. limites de largura de pulso;
+4. montagem mecânica;
+5. estabilidade da leitura ADC.
+
+---
+
+## Repositório
+
+[github.com/Jujupedro5052005/Controle-Servomotores-PWM](https://github.com/Jujupedro5052005/Controle-Servomotores-PWM)
+
+---
+
+## Autores
+
+**João Pedro de Jesus Cândido Silva**
+R.A. 23.01416-4
+
+**Erich Abreu Serafim**
+R.A. 23.10022-2
