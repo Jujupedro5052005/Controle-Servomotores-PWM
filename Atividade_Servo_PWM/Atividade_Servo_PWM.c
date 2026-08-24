@@ -1,195 +1,320 @@
+/*
+ * ============================================================================
+ * Controle de Servomotores por PWM - Raspberry Pi Pico / RP2040
+ * ============================================================================
+ *
+ * Integrantes:
+ *   João Pedro de Jesus Cândido Silva
+ *   R.A. 23.01416-4
+ *
+ *   Erich Abreu Serafim
+ *   R.A. 23.10022-2
+ *
+ * Repositório:
+ *   https://github.com/Jujupedro5052005/Controle-Servomotores-PWM
+ *
+ * Plataforma:
+ *   Raspberry Pi Pico / RP2040
+ *
+ * Linguagem:
+ *   C/C++ utilizando Raspberry Pi Pico SDK
+ *
+ * Descrição:
+ *   Implementação progressiva do controle de servomotores utilizando o
+ *   periférico PWM do RP2040.
+ *
+ *   Nível 1:
+ *     Controle automático de posição nas posições:
+ *     0°, 45°, 90°, 135°, 180°, 135°, 90°, 45° e 0°.
+ *
+ *   Nível 2:
+ *     Controle contínuo da posição de um servomotor através de um
+ *     potenciômetro conectado ao ADC0 / GPIO26.
+ *
+ *   Nível 3:
+ *     Controle de dois servomotores a partir de um único potenciômetro.
+ *
+ * Hardware:
+ *   Servo PWM : GPIO0
+ *   ADC0      : GPIO26
+ *
+ * Frequência PWM:
+ *   Aproximadamente 50 Hz (período de 20 ms).
+ *
+ * Calibração experimental do servomotor:
+ *   0°   -> 0,5 ms
+ *   90°  -> 1,5 ms
+ *   180° -> 2,5 ms
+ *
+ * ============================================================================
+ */
+
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <math.h>
-#include "hardware/clocks.h" // for clock_get_hz
+#include "hardware/clocks.h"
 #include "hardware/pwm.h"
 #include "hardware/adc.h"
 
-#define LED_PIN 16            // LED on-board do Pico (25)
-#define POT_PIN 26            // GPIO26 = ADC0
+// ==========================
+// Level selection
+// ==========================
+
+#define LEVEL 2   // 1 = automatic sequence, 2 = potentiometer control
+
+#if LEVEL < 1 || LEVEL > 3
+#error "LEVEL must be 1, 2 or 3"
+#endif
+
+// ==========================
+// GPIO configuration
+// ==========================
+
+#define SERVO_PIN 0
+#define POT_PIN 26              // GPIO26 = ADC0
+
+// ==========================
+// PWM / Servo configuration
+// ==========================
 
 const float cf_TARGET_FREQ = 50.0f;
-const float cf_TARGET_PERIOD = 1/cf_TARGET_FREQ;
+const float cf_TARGET_PERIOD = 1.0f / cf_TARGET_FREQ;
+
+float limits_ang[2] = {0.0f, 180.0f};
+float limits_ms[2] = {0.5f, 2.5f};   // Calibrated SG90 range
+
+volatile uint16_t vu16Wrap;
+
+// ==========================
+// Level 2 configuration
+// ==========================
+
+#define ADC_MAX_VALUE 4095
+#define ADC_NUM_SAMPLES 8
+#define ANGLE_DEADBAND 1.0f
+#define ADC_TIMER_MS 20
 
 /**
  * @brief Calculate clock divider and wrap value for desired PWM frequency
- *
- * @param fFrequency Desired PWM frequency (in Hz)
- * @param pfClkdiv Pointer to store calculated clock divider (range: 1.0 - 255.9375)
- * @param pu16Wrap Pointer to store calculated wrap value (TOP) (range: 1 - 65535)
- * @return true If valid clock divider and wrap value were found
- * @return false If frequency too low, can't generate using PWM
-   */
+ */
 bool bPwmCalculateFreq(float fFrequency, float *pfClkdiv, uint16_t *pu16Wrap)
 {
-    // Check for valid input
-    if (fFrequency <= 0.0f || pfClkdiv == NULL || pu16Wrap == NULL) {
+    if (fFrequency <= 0.0f || pfClkdiv == NULL || pu16Wrap == NULL)
         return false;
-    }
 
-    // Get the system clock frequency for PWM (typically 125 MHz)
-    uint32_t sys_clk_hz = clock_get_hz(clk_sys);  // Usually 125,000,000 Hz
-
-    // Calculate initial divider = sys_clk / desired PWM frequency
+    uint32_t sys_clk_hz = clock_get_hz(clk_sys);
     float fDivider = (float)sys_clk_hz / fFrequency;
 
-    // Case 1: If divider fits within 16-bit counter range (65535)
     if (fDivider <= 65535.0f) {
-        *pu16Wrap = (uint16_t)roundf(fDivider);  // Set TOP
-        *pfClkdiv = 1.0f;                        // Use no additional divider
+        *pu16Wrap = (uint16_t)roundf(fDivider);
+        *pfClkdiv = 1.0f;
         return true;
     }
 
-    // Case 2: Divider is too big, must scale down using clock divider
     float fClkDiv = fDivider / 65535.0f;
 
-    // Clock divider must be between 1.0 and 255.9375 (8.4 fixed-point)
     if (fClkDiv <= 255.9375f) {
-        *pu16Wrap = 65535;         // Set maximum TOP
-        *pfClkdiv = fClkDiv;       // Set scaled clock divider
+        *pu16Wrap = 65535;
+        *pfClkdiv = fClkDiv;
         return true;
     }
 
-    // Frequency too low; can't represent with PWM limits
     return false;
 }
 
 /**
- * @brief Calculate the PWM level value to set the desired duty cycle
- *
- * @param fDutyCycle Desired duty cycle in percentage (0.0 to 1.0)
- * @param u16Wrap PWM wrap (TOP) value
- * @return uint16_t Value to pass to pwm_set_gpio_level()
+ * @brief Convert duty cycle to PWM level
  */
 uint16_t u16PwmCalculateLevel(float fDutyCycle, uint16_t u16Wrap)
 {
-    // Clamp duty cycle to valid range (0.0% to 100.0%)
     if (fDutyCycle < 0.0f) fDutyCycle = 0.0f;
     if (fDutyCycle > 1.0f) fDutyCycle = 1.0f;
 
-    // Convert duty cycle percentage to level (0 to wrap)
-    return (uint16_t)((fDutyCycle * (float)u16Wrap));
+    return (uint16_t)(fDutyCycle * (float)u16Wrap);
 }
 
-volatile uint16_t vu16Wrap;
+/**
+ * @brief Set servo position in degrees
+ */
+void set_servo_angle(float angle)
+{
+    if (angle < limits_ang[0]) angle = limits_ang[0];
+    if (angle > limits_ang[1]) angle = limits_ang[1];
 
-// Callback do repetidor de timer (chamado a cada 200 ms)
-bool timer_cb(repeating_timer_t *t) {
-    uint16_t raw = adc_read();
-    float percent = raw / 4095.0f;
-    uint16_t pwm_level = u16PwmCalculateLevel(percent, vu16Wrap);
-    pwm_set_gpio_level(LED_PIN, pwm_level);
-    printf("%u,%.3f,%u\n", raw, percent, pwm_level);
-    return true;                       // Repetir indefinidamente
+    float m = (limits_ms[1] - limits_ms[0]) / (limits_ang[1] - limits_ang[0]);
+    float pulse_ms = limits_ms[0] + m * (angle - limits_ang[0]);
+    float duty = pulse_ms / (1000.0f * cf_TARGET_PERIOD);
+
+    uint16_t pwm_level = u16PwmCalculateLevel(duty, vu16Wrap);
+    pwm_set_gpio_level(SERVO_PIN, pwm_level);
+
+    printf("angle=%.1f, pulse=%.3f ms, duty=%.2f%%, pwm=%u\n",
+           angle, pulse_ms, duty * 100.0f, pwm_level);
 }
 
-// Callback do repetidor de timer (chamado a cada 2000 ms)
-float sequence[10] = {0.0, 45.0, 90.0, 135.0, 180.0, 135.0, 90.0, 45.0, 0.0};
-float limits_ang[2] = {0.0, 180.0};
-float limits_ms[2] = {1.0, 2.0};  // entre 5% e 10%
-int cont = 0;
-bool timer1_cb(repeating_timer_t *t) {
-    float m = (limits_ms[1]-limits_ms[0])/(limits_ang[1]-limits_ang[0]);
-    float period_ms = limits_ms[0] + m*(sequence[cont] - limits_ang[0]);
-    float percent = period_ms/(100*cf_TARGET_PERIOD);
+/**
+ * @brief Initialize servo PWM
+ */
+void servo_pwm_init(void)
+{
+    gpio_set_function(SERVO_PIN, GPIO_FUNC_PWM);
 
-    uint16_t pwm_level = u16PwmCalculateLevel(percent, vu16Wrap);
-    pwm_set_gpio_level(LED_PIN, pwm_level);
-    printf("%u,%.3f,%u\n", vu16Wrap, percent, pwm_level);
+    uint slice = pwm_gpio_to_slice_num(SERVO_PIN);
 
-    if(cont<9){
-        cont++;
-    } else{
-        cont=0;
-    }
-    return true;                       // Repetir indefinidamente
-}
-
-int main1(void) {
-    stdio_init_all();         // opcional, só se precisar de USB-serial
-
-    /* 1. Seleciona a função PWM no pino */
-    gpio_set_function(LED_PIN, GPIO_FUNC_PWM);
-
-    /* 2. Descobre qual slice controla esse GPIO */
-    uint slice = pwm_gpio_to_slice_num(LED_PIN);
-
-    /* 3. Cria configuração padrão e ajusta frequência/resolução          *
-     *    Frequência alvo: 50 Hz                                         */
-
-    float fClkdiv;
-    if (bPwmCalculateFreq(cf_TARGET_FREQ, &fClkdiv, (uint16_t *)(&vu16Wrap))) {
-        printf("PWM Settings: clkdiv = %.4f, wrap = %u\n", fClkdiv, vu16Wrap);
-    } else {
-        printf("Unable to calculate PWM settings for %.2f Hz\n", cf_TARGET_FREQ);
-        fClkdiv = 1.00f;
-        vu16Wrap = 255;
-    }
+    float fClkdiv = 125.0f;
+    vu16Wrap = 20000;
 
     pwm_config cfg = pwm_get_default_config();
     pwm_config_set_clkdiv(&cfg, fClkdiv);
-    pwm_config_set_wrap  (&cfg, vu16Wrap);
-
-    /* 4. Inicializa o slice e já o habilita */
+    pwm_config_set_wrap(&cfg, vu16Wrap);
     pwm_init(slice, &cfg, true);
 
-    /* 5. Configura Timer de 2000ms */
+    printf("PWM Settings: clkdiv=%.1f, wrap=%u, freq≈50Hz\n",
+           fClkdiv, vu16Wrap);
+}
+
+// ============================================================
+// LEVEL 1
+// ============================================================
+
+#if LEVEL == 1
+
+float sequence[9] = {
+    0.0f, 45.0f, 90.0f, 135.0f, 180.0f,
+    135.0f, 90.0f, 45.0f, 0.0f
+};
+
+int cont = 0;
+
+bool timer1_cb(repeating_timer_t *t)
+{
+    set_servo_angle(sequence[cont]);
+
+    if (cont < 8)
+        cont++;
+    else
+        cont = 0;
+
+    return true;
+}
+
+void run_level_1(void)
+{
+    gpio_set_function(SERVO_PIN, GPIO_FUNC_PWM);
+
+    uint slice = pwm_gpio_to_slice_num(SERVO_PIN);
+
+    float fClkdiv = 125.0f;
+    vu16Wrap = 20000;
+
+    printf("PWM Settings: clkdiv = %.4f, wrap = %u\n",
+           fClkdiv, vu16Wrap);
+
+    pwm_config cfg = pwm_get_default_config();
+    pwm_config_set_clkdiv(&cfg, fClkdiv);
+    pwm_config_set_wrap(&cfg, vu16Wrap);
+
+    pwm_init(slice, &cfg, true);
+
+    set_servo_angle(sequence[0]);
+    cont = 1;
+
     repeating_timer_t timer1;
     add_repeating_timer_ms(2000, timer1_cb, NULL, &timer1);
 
-    /* 6. Loop principal vazio */
-    while (true) {
+    while (true)
         tight_loop_contents();
-    }
 }
 
-int main(void) {
+#endif
 
-    main1();
+// ============================================================
+// LEVEL 2
+// ============================================================
 
-    /*
-    stdio_init_all();         // opcional, só se precisar de USB-serial
+#if LEVEL == 2
 
-    // 1. Seleciona a função PWM no pino 
-    gpio_set_function(LED_PIN, GPIO_FUNC_PWM);
+uint16_t read_adc_average(void)
+{
+    uint32_t sum = 0;
 
-    // 2. Descobre qual slice controla esse GPIO 
-    uint slice = pwm_gpio_to_slice_num(LED_PIN);
+    for (int i = 0; i < ADC_NUM_SAMPLES; i++)
+        sum += adc_read();
 
-    // 3. Cria configuração padrão e ajusta frequência/resolução         
-    //    Frequência alvo: 50 Hz                                         
+    return (uint16_t)(sum / ADC_NUM_SAMPLES);
+}
 
-    const float cf_TARGET_FREQ = 50.0f;
-    float fClkdiv;
-    if (bPwmCalculateFreq(cf_TARGET_FREQ, &fClkdiv, (uint16_t *)(&vu16Wrap))) {
-        printf("PWM Settings: clkdiv = %.4f, wrap = %u\n", fClkdiv, vu16Wrap);
-    } else {
-        printf("Unable to calculate PWM settings for %.2f Hz\n", cf_TARGET_FREQ);
-        fClkdiv = 1.00f;
-        vu16Wrap = 255;
+bool timer2_cb(repeating_timer_t *t)
+{
+    static float previous_angle = -1000.0f;
+
+    uint16_t raw = read_adc_average();
+    float percent = (float)raw / ADC_MAX_VALUE;
+    float angle = limits_ang[0] + percent * (limits_ang[1] - limits_ang[0]);
+
+    if (fabsf(angle - previous_angle) >= ANGLE_DEADBAND) {
+        set_servo_angle(angle);
+        printf("ADC=%u, percent=%.3f\n", raw, percent);
+        previous_angle = angle;
     }
 
-    pwm_config cfg = pwm_get_default_config();
-    pwm_config_set_clkdiv(&cfg, fClkdiv);
-    pwm_config_set_wrap  (&cfg, vu16Wrap);
+    return true;
+}
 
-    // 4. Inicializa o slice e já o habilita
-    pwm_init(slice, &cfg, true);
+void run_level_2(void)
+{
+    printf("\n=== LEVEL 2 - Potentiometer control ===\n");
 
-    // 5. Configura ADC
+    servo_pwm_init();
+
     adc_init();
     adc_gpio_init(POT_PIN);
     adc_select_input(0);
 
-    // 6. Configura Timer de 20ms
-    repeating_timer_t timer;
-    add_repeating_timer_ms(20, timer_cb, NULL, &timer);
+    set_servo_angle(90.0f);
 
-    // 5. Loop principal vazio 
-    while (true) {
+    repeating_timer_t timer2;
+    add_repeating_timer_ms(ADC_TIMER_MS, timer2_cb, NULL, &timer2);
+
+    while (true)
         tight_loop_contents();
-    }
-    */
+}
+
+#endif
+
+// ============================================================
+// LEVEL 3
+// ============================================================
+
+#if LEVEL == 3
+
+void run_level_3(void)
+{
+    printf("\n=== LEVEL 3 - Not implemented yet ===\n");
+
+    while (true)
+        tight_loop_contents();
+}
+
+#endif
+
+// ============================================================
+// MAIN
+// ============================================================
+
+int main(void)
+{
+    stdio_init_all();
+
+#if LEVEL == 1
+    run_level_1();
+#elif LEVEL == 2
+    run_level_2();
+#elif LEVEL == 3
+    run_level_3();
+#endif
+
+    return 0;
 }
