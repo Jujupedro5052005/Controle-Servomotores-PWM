@@ -57,24 +57,21 @@ Potenciômetro
 | Servo 1 — PWM |                 GP0 |
 | Potenciômetro |         GP26 / ADC0 |
 | Servo 2 — PWM | definido no Nível 3 |
-
----
-
 # PWM do servomotor
 
 Servomotores são controlados pela largura do pulso de um sinal PWM periódico.
 
 A frequência utilizada no projeto é aproximadamente:
 
-[
-f_{PWM}=50\ Hz
-]
+$$
+f_{PWM} = 50\ \text{Hz}
+$$
 
 correspondente a um período de aproximadamente:
 
-[
-T=\frac{1}{50}=20\ ms
-]
+$$
+T = \frac{1}{f_{PWM}} = \frac{1}{50} = 0{,}02\ \text{s} = 20\ \text{ms}
+$$
 
 A referência inicial do laboratório era:
 
@@ -96,24 +93,72 @@ Após calibração experimental, foi adotada a faixa:
 |    135° |          2,0 ms |
 |    180° |          2,5 ms |
 
-Assim, o mapeamento utilizado no projeto é:
+O mapeamento entre ângulo e largura de pulso é realizado por interpolação linear:
 
-[
+$$
+t_{pulso} =
+t_{min} +
+\frac{\theta-\theta_{min}}
+{\theta_{max}-\theta_{min}}
+\left(t_{max}-t_{min}\right)
+$$
+
+Para os limites adotados no projeto:
+
+$$
+\theta_{min}=0^\circ,\qquad
+\theta_{max}=180^\circ
+$$
+
+$$
+t_{min}=0{,}5\ \text{ms},\qquad
+t_{max}=2{,}5\ \text{ms}
+$$
+
+Portanto:
+
+$$
 t_{pulso}
 =========
 
-0,5+
-\frac{\theta}{180}(2,5-0,5)
-]
+0{,}5
++
+\frac{\theta}{180}
+(2{,}5-0{,}5)
+$$
+
+ou, de forma simplificada:
+
+$$
+t_{pulso}
+=========
+
+0{,}5
++
+\frac{\theta}{90}
+$$
 
 onde:
 
-* (\theta) é o ângulo desejado em graus;
-* (t_{pulso}) é a largura do pulso em milissegundos.
+* $\theta$ é o ângulo desejado, em graus;
+* $t_{pulso}$ é a largura do pulso, em milissegundos.
 
-A calibração foi mantida concentrada em constantes e na função responsável pela conversão de ângulo para PWM, facilitando alterações futuras.
+Por exemplo, para $\theta=90^\circ$:
 
----
+$$
+t_{pulso}
+=========
+
+0{,}5
++
+\frac{90}{180}(2{,}0)
+=====================
+
+1{,}5\ \text{ms}
+$$
+
+A calibração foi mantida concentrada em constantes e na função responsável pela conversão de ângulo em largura de pulso/PWM, facilitando ajustes futuros para outros servomotores.
+
 
 # Configuração do PWM no RP2040
 
