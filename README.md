@@ -116,49 +116,41 @@ t_{max}=2{,}5\ \text{ms}
 $$
 
 Portanto:
+O mapeamento utilizado no projeto é:
 
 $$
-t_{pulso}
-=========
-
-0{,}5
-+
-\frac{\theta}{180}
-(2{,}5-0{,}5)
+\begin{aligned}
+t_{\text{pulso}}
+&= 0{,}5 + \frac{\theta}{180}(2{,}5 - 0{,}5)
+\end{aligned}
 $$
 
 ou, de forma simplificada:
 
 $$
-t_{pulso}
-=========
-
-0{,}5
-+
-\frac{\theta}{90}
+\begin{aligned}
+t_{\text{pulso}}
+&= 0{,}5 + \frac{\theta}{90}
+\end{aligned}
 $$
 
 onde:
 
-* $\theta$ é o ângulo desejado, em graus;
-* $t_{pulso}$ é a largura do pulso, em milissegundos.
+- $\theta$ é o ângulo desejado, em graus;
+- $t_{\text{pulso}}$ é a largura do pulso, em milissegundos.
 
-Por exemplo, para $\theta=90^\circ$:
+Por exemplo, para $\theta = 90^\circ$:
 
 $$
-t_{pulso}
-=========
-
-0{,}5
-+
-\frac{90}{180}(2{,}0)
-=====================
-
-1{,}5\ \text{ms}
+\begin{aligned}
+t_{\text{pulso}}
+&= 0{,}5 + \frac{90}{180}(2{,}0) \\
+&= 0{,}5 + 1{,}0 \\
+&= 1{,}5\ \text{ms}
+\end{aligned}
 $$
 
 A calibração foi mantida concentrada em constantes e na função responsável pela conversão de ângulo em largura de pulso/PWM, facilitando ajustes futuros para outros servomotores.
-
 
 # Configuração do PWM no RP2040
 
